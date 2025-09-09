@@ -20,12 +20,13 @@ const LiveIntersection = () => {
     manualOverride
   } = useTrafficData();
 
-  // Mumbai-specific intelligent calculations
+  // Mumbai-specific intelligent calculations (without percentage display)
   const [mumbaiStats, setMumbaiStats] = useState({
-    fuelSaved: 0,
-    timeSaved: 0,
-    co2Reduced: 0,
-    totalSavings: 0,
+    fuelSavedLiters: 0,
+    timeSavedMinutes: 0,
+    co2ReducedKg: 0,
+    totalSavingsRupees: 0,
+    waitTimeImprovement: 0,
     efficiencyGain: 0
   });
 
@@ -38,35 +39,37 @@ const LiveIntersection = () => {
 
   useEffect(() => {
     if (state && metrics) {
-      // Real-time calculations based on actual performance vs traditional systems
-      const avgWaitReduction = Math.max(0, 45 - (state.avg_wait_time || 0)); // 45s Mumbai average
+      // Mumbai-specific real-time calculations (absolute values, not percentages)
+      const avgWaitReduction = Math.max(0, 45 - (state.avg_wait_time || 0)); // Improvement in seconds
       const carsPerMinute = metrics.throughput || 0;
       const carsPerHour = carsPerMinute * 60;
       
-      // More accurate fuel saving calculation
-      const fuelSavedPerHour = (state.total_fuel_saved || 0) * 3600; // Convert to hourly rate
-      const actualFuelSaved = Math.max(fuelSavedPerHour, (avgWaitReduction / 3600) * carsPerHour * 0.8);
+      // Actual fuel saved calculation (liters per hour)
+      const actualFuelSaved = Math.max(0, avgWaitReduction * carsPerHour * 0.00028); // Mumbai traffic consumption
       
-      // Time saved calculation (more cars passing = less overall time)
-      const timeEfficiency = Math.max(0, carsPerMinute - 12); // 12 cars/min is Mumbai average
-      const timeSaved = (avgWaitReduction * carsPerHour) / 60 + (timeEfficiency * 60);
+      // Time saved calculation (minutes per hour)
+      const timeSaved = Math.max(0, (avgWaitReduction * carsPerHour) / 60);
       
-      // CO2 reduction
-      const co2Reduced = actualFuelSaved * 2.31;
+      // CO2 reduction (kg per hour)
+      const co2Reduced = actualFuelSaved * 2.31; // kg CO2 per liter fuel
       
-      // Economic savings - fuel + time + productivity
-      const fuelCostSaved = actualFuelSaved * 105;
-      const timeCostSaved = (timeSaved / 60) * 200; // ₹200/hour time value
+      // Economic savings per hour
+      const fuelCostSaved = actualFuelSaved * 105; // ₹105 per liter
+      const timeCostSaved = timeSaved * 200; // ₹200 per hour time value
       const totalSavings = fuelCostSaved + timeCostSaved;
       
-      // System efficiency improvement
-      const efficiencyGain = metrics.efficiency_improvement || 0;
+      // Wait time improvement in seconds
+      const waitTimeImprovement = avgWaitReduction;
+      
+      // Efficiency gain percentage
+      const efficiencyGain = 45 > 0 ? ((avgWaitReduction / 45) * 100) : 0;
       
       setMumbaiStats({
-        fuelSaved: Math.max(0, actualFuelSaved),
-        timeSaved: Math.max(0, timeSaved),
-        co2Reduced: Math.max(0, co2Reduced),
-        totalSavings: Math.max(0, totalSavings),
+        fuelSavedLiters: actualFuelSaved,
+        timeSavedMinutes: timeSaved,
+        co2ReducedKg: co2Reduced,
+        totalSavingsRupees: totalSavings,
+        waitTimeImprovement: waitTimeImprovement,
         efficiencyGain: efficiencyGain
       });
     }
@@ -81,18 +84,16 @@ const LiveIntersection = () => {
   // Confirm manual override
   const confirmOverride = () => {
     if (selectedOverrideDirection && overrideReason.trim()) {
-      // Log the override event
       const overrideEvent = {
         timestamp: new Date().toISOString(),
         direction: selectedOverrideDirection,
         reason: overrideReason,
-        operator: 'Traffic Control Officer', // In real system, this would be authenticated user
+        operator: 'Mumbai Traffic Control Officer',
         previousSignal: state?.signal
       };
       
-      console.log('Manual Override Activated:', overrideEvent);
+      console.log('Mumbai Manual Override Activated:', overrideEvent);
       
-      // Activate override
       if (manualOverride) {
         manualOverride(selectedOverrideDirection, overrideReason);
       }
@@ -103,7 +104,7 @@ const LiveIntersection = () => {
       setSelectedOverrideDirection(null);
       setOverrideReason('');
       
-      // Auto-disable override after 60 seconds for safety
+      // Auto-disable override after 60 seconds
       setTimeout(() => {
         setOverrideActive(false);
         setOverrideStartTime(null);
@@ -150,6 +151,9 @@ const LiveIntersection = () => {
   };
 
   const highestQueueLane = getHighestQueueLane();
+  
+  // Check if target is achieved (30-35 seconds)
+  const targetAchieved = state?.avg_wait_time >= 30 && state?.avg_wait_time <= 35;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -171,7 +175,7 @@ const LiveIntersection = () => {
                   </div>
                   <h2 className="text-xl font-bold text-red-600 mb-2">MANUAL OVERRIDE WARNING</h2>
                   <p className="text-gray-700 text-sm">
-                    You are about to override the AI traffic management system for direction <strong>{selectedOverrideDirection}</strong>.
+                    You are about to override the Mumbai AI traffic management system for direction <strong>{selectedOverrideDirection}</strong>.
                   </p>
                 </div>
                 
@@ -179,7 +183,7 @@ const LiveIntersection = () => {
                   <div className="flex items-start space-x-2">
                     <span className="text-yellow-600 text-sm">🚨</span>
                     <div className="text-sm text-yellow-800">
-                      <p className="font-semibold mb-1">IMPORTANT NOTICE:</p>
+                      <p className="font-semibold mb-1">MUMBAI TRAFFIC POLICE NOTICE:</p>
                       <ul className="list-disc list-inside space-y-1 text-xs">
                         <li>This action will be logged and monitored by Mumbai Traffic Police</li>
                         <li>Override will automatically disable after 60 seconds</li>
@@ -204,9 +208,9 @@ const LiveIntersection = () => {
                     <option value="VIP Movement">VIP Movement</option>
                     <option value="Accident Management">Accident Management</option>
                     <option value="Road Construction">Road Construction</option>
-                    <option value="Special Event">Special Event</option>
+                    <option value="Festival/Special Event">Festival/Special Event</option>
                     <option value="System Malfunction">System Malfunction</option>
-                    <option value="Manual Traffic Control">Manual Traffic Control</option>
+                    <option value="Heavy Traffic Congestion">Heavy Traffic Congestion</option>
                     <option value="Other">Other</option>
                   </select>
                 </div>
@@ -235,13 +239,28 @@ const LiveIntersection = () => {
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">🧠 Intelligent Mumbai Traffic System</h1>
+              <h1 className="text-3xl font-bold text-gray-900">🧠 Mumbai Smart Traffic Management System</h1>
               <p className="text-gray-600 mt-2">AI-Powered Dynamic Signal Management</p>
               <p className="text-sm text-blue-600 mt-1">📍 Bandra-Kurla Complex, Mumbai - Junction 12A</p>
+              
+              {/* Target Achievement Indicator */}
+              <div className="mt-3 flex items-center space-x-4">
+                <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  targetAchieved 
+                    ? 'bg-green-100 text-green-800 border border-green-200' 
+                    : 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                }`}>
+                  <span className="mr-1">🎯</span>
+                  {targetAchieved ? 'Target Achieved!' : 'Working towards 30-35s target'}
+                </div>
+                <div className="text-sm text-gray-600">
+                  Current: {(state?.avg_wait_time || 0).toFixed(1)}s | Traditional: 45s
+                </div>
+              </div>
             </div>
             <div className="text-right">
               <div className="text-sm text-gray-500">
-                {overrideActive ? 'Manual Override' : 'Intelligent Mode'}
+                {overrideActive ? 'Manual Override' : 'AI Intelligent Mode'}
               </div>
               <div className="flex items-center space-x-2 mt-1">
                 <div className={`w-3 h-3 rounded-full animate-pulse ${
@@ -254,7 +273,7 @@ const LiveIntersection = () => {
                 </span>
               </div>
               <div className="text-xs text-blue-600 mt-1">
-                Efficiency: +{mumbaiStats.efficiencyGain.toFixed(1)}%
+                Wait Time Improvement: {mumbaiStats.waitTimeImprovement.toFixed(1)}s
               </div>
             </div>
           </div>
@@ -274,10 +293,10 @@ const LiveIntersection = () => {
                   <div className="w-4 h-4 bg-red-500 rounded-full animate-ping"></div>
                   <div>
                     <p className="font-semibold">
-                      🚨 MANUAL OVERRIDE ACTIVE
+                      🚨 MUMBAI MANUAL OVERRIDE ACTIVE
                     </p>
                     <p className="text-sm">
-                      Signal manually controlled • Auto-disable in {60 - Math.floor((Date.now() - overrideStartTime) / 1000)}s
+                      Signal manually controlled • Auto-disable in {overrideStartTime ? 60 - Math.floor((Date.now() - overrideStartTime) / 1000) : 60}s
                     </p>
                   </div>
                 </div>
@@ -317,78 +336,33 @@ const LiveIntersection = () => {
         </AnimatePresence>
 
         {/* Smart Queue Alert */}
-        {highestQueueLane && state?.queues[highestQueueLane] > 8 && !overrideActive && (
+        {highestQueueLane && state?.queues[highestQueueLane] > 10 && !overrideActive && (
           <div className="mb-6 p-4 bg-yellow-100 border border-yellow-400 text-yellow-800 rounded-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <span className="text-lg">⚡</span>
                 <p className="font-medium">
-                  Smart Detection: High traffic in {highestQueueLane} direction ({state.queues[highestQueueLane]} vehicles)
+                  Mumbai AI Detection: Heavy congestion in {highestQueueLane} direction ({state.queues[highestQueueLane]} vehicles)
                 </p>
               </div>
               <div className="text-sm">
-                Signal Duration: {state?.signal_duration}s
+                Extended Signal Duration: {state?.signal_duration}s
               </div>
             </div>
           </div>
         )}
 
-        {/* Manual Override Control Buttons */}
-        <div className="mb-8 bg-white rounded-lg shadow-lg p-6 border-l-4 border-red-500">
-          <div className="flex justify-between items-center mb-4">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-800">🚦 Manual Override Controls</h3>
-              <p className="text-sm text-gray-600">Emergency traffic control - Use only when necessary</p>
-            </div>
-            <div className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded">
-              Monitored by Traffic Police
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-  {[
-    { direction: 'N', label: 'North (Kurla)', color: 'bg-blue-500 hover:bg-blue-600' },
-    { direction: 'E', label: 'East (Chembur)', color: 'bg-green-500 hover:bg-green-600' },
-    { direction: 'S', label: 'South (Fort)', color: 'bg-orange-500 hover:bg-orange-600' },
-    { direction: 'W', label: 'West (Bandra)', color: 'bg-purple-500 hover:bg-purple-600' }
-  ].map(({ direction, label, color }) => (
-    <button
-      key={direction}
-      onClick={() => handleOverrideRequest(direction)}
-      disabled={overrideActive || state?.emergencyActive}
-      className={`p-4 text-white rounded-lg font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${color} ${
-        state?.signal === direction ? 'ring-4 ring-yellow-400' : ''
-      }`}
-    >
-      <div className="text-2xl mb-1">
-        {direction === 'N' ? '⬆️' : direction === 'E' ? '➡️' : direction === 'S' ? '⬇️' : '⬅️'}
-      </div>
-      <div className="text-sm font-semibold">{direction}</div>
-      <div className="text-xs opacity-90">{label.split(' ')[1]}</div>
-      <div className="text-xs mt-1">
-        Queue: {state?.queues?.[direction] || 0}
-      </div>
-    </button>
-  ))}
-</div>
-          
-          <div className="mt-4 text-xs text-gray-500 bg-gray-50 p-3 rounded">
-            <p><strong>Warning:</strong> Manual overrides are logged with timestamp, reason, and operator details. 
-            Use only for emergency situations, VIP movements, or when AI system requires intervention.</p>
-          </div>
-        </div>
-
-        {/* Enhanced Mumbai Statistics Cards */}
+        {/* Mumbai Statistics Cards - Showing absolute improvements */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Fuel Saved</p>
                 <p className="text-2xl font-bold text-green-600">
-                  {mumbaiStats.fuelSaved.toFixed(1)}L
+                  {mumbaiStats.fuelSavedLiters.toFixed(1)}L
                 </p>
                 <p className="text-xs text-green-700 mt-1">
-                  ₹{(mumbaiStats.fuelSaved * 105).toFixed(0)} saved
+                  ₹{(mumbaiStats.fuelSavedLiters * 105).toFixed(0)} saved per hour
                 </p>
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
@@ -402,7 +376,7 @@ const LiveIntersection = () => {
               <div>
                 <p className="text-sm font-medium text-gray-600">Time Saved</p>
                 <p className="text-2xl font-bold text-blue-600">
-                  {mumbaiStats.timeSaved.toFixed(0)} min
+                  {mumbaiStats.timeSavedMinutes.toFixed(0)} min
                 </p>
                 <p className="text-xs text-blue-700 mt-1">
                   per hour
@@ -419,7 +393,7 @@ const LiveIntersection = () => {
               <div>
                 <p className="text-sm font-medium text-gray-600">CO₂ Reduced</p>
                 <p className="text-2xl font-bold text-purple-600">
-                  {mumbaiStats.co2Reduced.toFixed(1)} kg
+                  {mumbaiStats.co2ReducedKg.toFixed(1)} kg
                 </p>
                 <p className="text-xs text-purple-700 mt-1">
                   per hour
@@ -436,7 +410,7 @@ const LiveIntersection = () => {
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Savings</p>
                 <p className="text-2xl font-bold text-orange-600">
-                  ₹{mumbaiStats.totalSavings.toFixed(0)}
+                  ₹{mumbaiStats.totalSavingsRupees.toFixed(0)}
                 </p>
                 <p className="text-xs text-orange-700 mt-1">
                   per hour
@@ -446,6 +420,51 @@ const LiveIntersection = () => {
                 💰
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Manual Override Control Buttons - FIXED SECTION */}
+        <div className="mb-8 bg-white rounded-lg shadow-lg p-6 border-l-4 border-red-500">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800">🚦 Mumbai Traffic Control Override</h3>
+              <p className="text-sm text-gray-600">Emergency traffic control - Use only when necessary</p>
+            </div>
+            <div className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded">
+              Monitored by Mumbai Traffic Police
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { direction: 'N', label: 'North (Kurla)', color: 'bg-blue-500 hover:bg-blue-600' },
+              { direction: 'E', label: 'East (Chembur)', color: 'bg-green-500 hover:bg-green-600' },
+              { direction: 'S', label: 'South (Fort)', color: 'bg-orange-500 hover:bg-orange-600' },
+              { direction: 'W', label: 'West (Bandra)', color: 'bg-purple-500 hover:bg-purple-600' }
+            ].map(({ direction, label, color }) => (
+              <button
+                key={direction}
+                onClick={() => handleOverrideRequest(direction)}
+                disabled={overrideActive || state?.emergencyActive}
+                className={`p-4 text-white rounded-lg font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${color} ${
+                  state?.signal === direction ? 'ring-4 ring-yellow-400' : ''
+                }`}
+              >
+                <div className="text-2xl mb-1">
+                  {direction === 'N' ? '⬆️' : direction === 'E' ? '➡️' : direction === 'S' ? '⬇️' : '⬅️'}
+                </div>
+                <div className="text-sm font-semibold">{direction}</div>
+                <div className="text-xs opacity-90">{label.split('(')[1]?.replace(')', '') || label}</div>
+                <div className="text-xs mt-1">
+                  Queue: {state?.queues?.[direction] || 0}
+                </div>
+              </button>
+            ))}
+          </div>
+          
+          <div className="mt-4 text-xs text-gray-500 bg-gray-50 p-3 rounded">
+            <p><strong>Warning:</strong> Manual overrides are logged with timestamp, reason, and operator details. 
+            Use only for emergency situations, VIP movements, or when AI system requires intervention.</p>
           </div>
         </div>
 
@@ -674,14 +693,16 @@ const LiveIntersection = () => {
               >
                 🧠 AI Simulation
               </button>
-              <button
-                onClick={switchToBackend}
-                className={`px-4 py-2 text-sm font-medium rounded-lg ${
-                  !useMock ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                📡 Live Data
-              </button>
+              {switchToBackend && (
+                <button
+                  onClick={switchToBackend}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg ${
+                    !useMock ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  📡 Live Data
+                </button>
+              )}
             </div>
             
             {useMock && (

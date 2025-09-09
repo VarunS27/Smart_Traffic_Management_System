@@ -69,6 +69,63 @@ const Dashboard = () => {
           )}
         </AnimatePresence>
 
+        {/* Header Section with enhanced status displays */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-4xl font-bold text-gray-900 mb-2">
+                🧠 Smart Traffic Management System
+              </h1>
+              <p className="text-lg text-gray-600 mb-4">
+                AI-Powered Traffic Optimization Dashboard
+              </p>
+              <div className="flex items-center space-x-4">
+                <span className={`inline-flex items-center space-x-2 px-4 py-2 rounded-full text-sm font-semibold border ${
+                  state?.system_mode === 'Emergency' 
+                    ? 'bg-red-100 text-red-800 border-red-200'
+                    : state?.system_mode === 'Post-Emergency Rotation'
+                      ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                      : 'bg-blue-100 text-blue-800 border-blue-200'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full animate-pulse ${
+                    state?.system_mode === 'Emergency' ? 'bg-red-500'
+                      : state?.system_mode === 'Post-Emergency Rotation' ? 'bg-yellow-500'
+                      : 'bg-blue-500'
+                  }`}></span>
+                  <span>{state?.system_mode || 'AI Intelligent'}</span>
+                </span>
+                <span className="text-sm text-gray-500">📍 Mumbai Traffic Junction</span>
+              </div>
+              
+              {/* Enhanced status indicators */}
+              {state?.empty_roads && state.empty_roads.length > 0 && (
+                <div className="mt-2">
+                  <span className="inline-flex items-center space-x-1 px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-xs">
+                    <span>🚫</span>
+                    <span>Empty Roads: {state.empty_roads.join(', ')}</span>
+                  </span>
+                </div>
+              )}
+              
+              {state?.postEmergencyMode && (
+                <div className="mt-2">
+                  <span className="inline-flex items-center space-x-1 px-3 py-1 rounded-full bg-yellow-100 text-yellow-700 text-xs">
+                    <span>🔄</span>
+                    <span>Post-Emergency Rotation: {60 - state.postEmergencyTimer}s remaining</span>
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="text-right">
+              <div className="text-sm text-gray-500 mb-1">System Status</div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-green-600 font-semibold">OPERATIONAL</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <StatCard
@@ -234,12 +291,63 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Charts Panel */}
+          {/* Analytics Panel with new metrics */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-4">
                 Analytics
               </h2>
+              
+              {/* Quick Stats */}
+              <div className="space-y-4 mb-6">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <div className="text-sm text-blue-600 font-medium">Current Signal</div>
+                  <div className="text-2xl font-bold text-blue-800">{state?.signal || 'None'}</div>
+                  {state?.empty_roads?.includes(state?.signal) && (
+                    <div className="text-xs text-gray-500 mt-1">⚠️ Empty Road</div>
+                  )}
+                </div>
+                
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <div className="text-sm text-green-600 font-medium">Active Roads</div>
+                  <div className="text-2xl font-bold text-green-800">
+                    {state?.roads_with_traffic?.length || 0}/4
+                  </div>
+                  <div className="text-xs text-green-700 mt-1">
+                    {state?.roads_with_traffic?.join(', ') || 'None'}
+                  </div>
+                </div>
+                
+                <div className="bg-orange-50 p-4 rounded-lg">
+                  <div className="text-sm text-orange-600 font-medium">Wait Time</div>
+                  <div className="text-2xl font-bold text-orange-800">
+                    {(state?.avg_wait_time || 0).toFixed(1)}s
+                  </div>
+                </div>
+                
+                {state?.emergencyActive && (
+                  <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                    <div className="text-sm text-red-600 font-medium">Emergency Mode</div>
+                    <div className="text-lg font-bold text-red-800">
+                      {state.emergencyDirection} Lane
+                    </div>
+                    <div className="text-xs text-red-700 mt-1">Priority Active</div>
+                  </div>
+                )}
+                
+                {state?.postEmergencyMode && (
+                  <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                    <div className="text-sm text-yellow-600 font-medium">Post-Emergency</div>
+                    <div className="text-lg font-bold text-yellow-800">
+                      Rotation Mode
+                    </div>
+                    <div className="text-xs text-yellow-700 mt-1">
+                      {60 - (state.postEmergencyTimer || 0)}s remaining
+                    </div>
+                  </div>
+                )}
+              </div>
+              
               <ChartPanel metrics={metrics} />
             </div>
           </div>
