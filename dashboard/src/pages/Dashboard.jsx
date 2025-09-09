@@ -6,6 +6,7 @@ import TrafficLight from '../components/TrafficLight';
 import StatCard from '../components/StatCard';
 import ChartPanel from '../components/ChartPanel';
 import Loader from '../components/Loader';
+import ErrorBoundary from '../components/ErrorBoundary';
 
 const Dashboard = () => {
   const { 
@@ -31,6 +32,12 @@ const Dashboard = () => {
       </div>
     );
   }
+
+  const DashboardWithErrorBoundary = () => (
+    <ErrorBoundary>
+      <Dashboard />
+    </ErrorBoundary>
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
