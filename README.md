@@ -33,4 +33,3 @@ The frontend visualizes traffic flow, metrics, and KPIs in real time.
 
 
 
-## 📂 Folder Structure
