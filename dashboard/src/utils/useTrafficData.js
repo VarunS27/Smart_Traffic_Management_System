@@ -1,4 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+  import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { TRAFFIC_CONSTANTS } from './constants';
+import { VehicleManager } from './VehicleManager';
+import { SignalManager } from './SignalManager';
 import { getState, getMetrics } from './api';
 
 // Enhanced Mumbai Traffic Simulator with Realistic Wait Time Management
@@ -889,31 +892,54 @@ export function useTrafficData(pollInterval = 1000) {
   const [error, setError] = useState(null);
   const [useMock, setUseMock] = useState(true);
   const [simulationSpeed, setSimulationSpeed] = useState(1);
+
+  const vehicleManager = useMemo(() => new VehicleManager(), []);
+  const signalManager = useMemo(() => new SignalManager(), []);
   
   const intervalRef = useRef(null);
   const mockIntervalRef = useRef(null);
 
+  const simulationTick = useCallback(() => {
+    const emergencyVehicle = vehicleManager.spawnCar(signalManager.currentSignal);
+    
+    if (emergencyVehicle) {
+      signalManager.handleEmergencyVehicle(emergencyVehicle);
+    }
+
+    signalManager.updateSignal(vehicleManager.getQueueLengths());
+    vehicleManager.updateVehicles(signalManager.currentSignal);
+    
+    setState(vehicleManager.getState());
+    setMetrics(vehicleManager.getMetrics());
+  }, [vehicleManager, signalManager]);
+
   useEffect(() => {
     if (useMock) {
-      mockSimulator.start();
-      
-      const mockTick = () => {
-        mockSimulator.tick();
-        setState(mockSimulator.getState());
-        setMetrics(mockSimulator.getMetrics());
+      try {
+        vehicleManager.start();
+        
+        const mockTick = () => {
+          simulationTick();
+          setLoading(false);
+          setError(null);
+        };
+
+        mockTick();
+        mockIntervalRef.current = setInterval(
+          mockTick, 
+          Math.max(100, 500 / simulationSpeed)
+        );
+
+        return () => {
+          if (mockIntervalRef.current) {
+            clearInterval(mockIntervalRef.current);
+          }
+          vehicleManager.stop();
+        };
+      } catch (err) {
+        setError(`Simulation error: ${err.message}`);
         setLoading(false);
-        setError(null);
-      };
-
-      mockTick();
-      mockIntervalRef.current = setInterval(mockTick, Math.max(100, 500 / simulationSpeed));
-
-      return () => {
-        if (mockIntervalRef.current) {
-          clearInterval(mockIntervalRef.current);
-        }
-        mockSimulator.stop();
-      };
+      }
     }
   }, [useMock, simulationSpeed]);
 
@@ -932,7 +958,8 @@ export function useTrafficData(pollInterval = 1000) {
 
   const resetSimulation = () => {
     if (useMock) {
-      mockSimulator.resetSimulation();
+      vehicleManager.reset();
+      signalManager.reset();
     }
   };
 
