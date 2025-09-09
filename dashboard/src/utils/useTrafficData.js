@@ -8,16 +8,21 @@ class MockTrafficSimulator {
       N: [], S: [], E: [], W: []
     };
     this.carIdCounter = 0;
-    this.currentSignal = 'NS'; // NS = North-South green, EW = East-West green
+    this.currentSignal = 'N'; // Only one direction at a time: N, S, E, or W
     this.signalTimer = 0;
-    this.signalDuration = 30; // seconds
+    this.signalDuration = 25; // seconds per direction
     this.totalCarsPassed = 0;
+    this.emergencyVehicles = [];
+    this.emergencyActive = false;
+    this.emergencyDirection = null;
     this.metrics = {
       waitTimes: [],
       throughputHistory: [],
       queueHistory: []
     };
     this.isRunning = false;
+    this.signalSequence = ['N', 'E', 'S', 'W']; // Clockwise rotation
+    this.currentSignalIndex = 0;
   }
 
   start() {
@@ -28,19 +33,78 @@ class MockTrafficSimulator {
     this.isRunning = false;
   }
 
-  // Spawn new cars randomly
+  // Spawn new cars randomly including emergency vehicles
   spawnCar() {
-    if (Math.random() < 0.3) { // 30% chance per tick
+    if (Math.random() < 0.4) { // 40% chance per tick
       const lanes = ['N', 'S', 'E', 'W'];
       const lane = lanes[Math.floor(Math.random() * lanes.length)];
       
-      this.cars[lane].push({
+      // Emergency vehicle spawn chance (2% for ambulance, 1% for police, 1% for fire)
+      let carType = 'normal';
+      const emergencyRand = Math.random();
+      if (emergencyRand < 0.02) {
+        carType = 'ambulance';
+      } else if (emergencyRand < 0.03) {
+        carType = 'police';
+      } else if (emergencyRand < 0.04) {
+        carType = 'fire';
+      }
+
+      const newCar = {
         id: this.carIdCounter++,
         position: 0,
-        speed: 2 + Math.random() * 2, // 2-4 units per tick
+        speed: carType === 'normal' ? 2 + Math.random() * 2 : 3 + Math.random() * 2, // Emergency vehicles faster
         waitTime: 0,
-        spawned: Date.now()
+        spawned: Date.now(),
+        type: carType
+      };
+
+      this.cars[lane].push(newCar);
+
+      // Handle emergency vehicle priority
+      if (carType !== 'normal') {
+        this.handleEmergencyVehicle(lane, carType);
+      }
+    }
+  }
+
+  handleEmergencyVehicle(lane, type) {
+    // Ambulance has highest priority, then fire, then police
+    const priority = type === 'ambulance' ? 3 : type === 'fire' ? 2 : 1;
+    
+    if (!this.emergencyActive || priority > (this.getCurrentEmergencyPriority() || 0)) {
+      this.emergencyActive = true;
+      this.emergencyDirection = lane;
+      this.currentSignal = lane;
+      this.signalTimer = 0; // Reset timer to give emergency vehicle time
+      console.log(`Emergency ${type} detected in lane ${lane}! Switching signal...`);
+    }
+  }
+
+  getCurrentEmergencyPriority() {
+    const emergencyTypes = ['ambulance', 'fire', 'police'];
+    let maxPriority = 0;
+    
+    ['N', 'S', 'E', 'W'].forEach(lane => {
+      this.cars[lane].forEach(car => {
+        if (car.type !== 'normal') {
+          const priority = car.type === 'ambulance' ? 3 : car.type === 'fire' ? 2 : 1;
+          maxPriority = Math.max(maxPriority, priority);
+        }
       });
+    });
+    
+    return maxPriority;
+  }
+
+  checkEmergencyVehiclesPassed() {
+    if (this.emergencyActive) {
+      const hasEmergencyInDirection = this.cars[this.emergencyDirection]?.some(car => car.type !== 'normal');
+      if (!hasEmergencyInDirection) {
+        this.emergencyActive = false;
+        this.emergencyDirection = null;
+        console.log('Emergency vehicles cleared, returning to normal operation');
+      }
     }
   }
 
@@ -51,22 +115,28 @@ class MockTrafficSimulator {
     // Spawn new cars
     this.spawnCar();
 
-    // Update signal timing
-    this.signalTimer += 1;
-    if (this.signalTimer >= this.signalDuration) {
-      this.currentSignal = this.currentSignal === 'NS' ? 'EW' : 'NS';
-      this.signalTimer = 0;
+    // Update signal timing (only if no emergency)
+    if (!this.emergencyActive) {
+      this.signalTimer += 1;
+      if (this.signalTimer >= this.signalDuration) {
+        // Move to next signal in sequence
+        this.currentSignalIndex = (this.currentSignalIndex + 1) % this.signalSequence.length;
+        this.currentSignal = this.signalSequence[this.currentSignalIndex];
+        this.signalTimer = 0;
+      }
     }
 
     // Move cars based on signal state
     ['N', 'S', 'E', 'W'].forEach(lane => {
-      const isGreen = (lane === 'N' || lane === 'S') ? 
-        this.currentSignal === 'NS' : 
-        this.currentSignal === 'EW';
-
-      this.cars[lane] = this.cars[lane].map(car => {
-        // If green light and no car blocking, move forward
-        if (isGreen && car.position < 90) {
+      const isGreen = this.currentSignal === lane;
+      
+      this.cars[lane] = this.cars[lane].map((car, index) => {
+        // Check if car is blocked by car in front
+        const carInFront = this.cars[lane][index - 1];
+        const isBlocked = carInFront && (car.position + 8 >= carInFront.position);
+        
+        // If green light and not blocked, move forward
+        if (isGreen && !isBlocked && car.position < 95) {
           return {
             ...car,
             position: Math.min(100, car.position + car.speed)
@@ -74,7 +144,7 @@ class MockTrafficSimulator {
         }
         
         // If red light or blocked, increment wait time
-        if (!isGreen || car.position >= 90) {
+        if (!isGreen || isBlocked) {
           return {
             ...car,
             waitTime: car.waitTime + 1
@@ -84,7 +154,7 @@ class MockTrafficSimulator {
         return car;
       });
 
-      // Remove cars that passed through intersection
+      // Remove cars that passed through intersection (position >= 100)
       const passedCars = this.cars[lane].filter(car => car.position >= 100);
       this.cars[lane] = this.cars[lane].filter(car => car.position < 100);
       
@@ -97,6 +167,9 @@ class MockTrafficSimulator {
         }
       });
     });
+
+    // Check if emergency vehicles have passed
+    this.checkEmergencyVehiclesPassed();
 
     // Update throughput history
     this.metrics.throughputHistory.push({
@@ -123,11 +196,11 @@ class MockTrafficSimulator {
   }
 
   calculateThroughput() {
-    const lastMinute = this.metrics.throughputHistory.filter(
+    const recentHistory = this.metrics.throughputHistory.filter(
       entry => Date.now() - entry.timestamp < 60000
     );
-    return lastMinute.length > 0 ? 
-      lastMinute.reduce((sum, entry) => sum + entry.throughput, 0) / lastMinute.length :
+    return recentHistory.length > 0 ? 
+      this.totalCarsPassed / Math.max(1, recentHistory.length / 60) :
       0;
   }
 
@@ -139,6 +212,8 @@ class MockTrafficSimulator {
   getState() {
     return {
       signal: this.currentSignal,
+      emergencyActive: this.emergencyActive,
+      emergencyDirection: this.emergencyDirection,
       queues: {
         N: this.cars.N.length,
         S: this.cars.S.length,
@@ -156,13 +231,14 @@ class MockTrafficSimulator {
   getMetrics() {
     return {
       total_cars: this.totalCarsPassed,
-      avg_trip_time: this.calculateAvgWaitTime() * 0.5, // Mock calculation
+      avg_trip_time: this.calculateAvgWaitTime() * 0.5,
       throughput: this.calculateThroughput(),
       queue_history: this.metrics.queueHistory.slice(-20),
       wait_time_history: this.metrics.waitTimes.slice(-20).map((time, index) => ({
         time: index,
         wait_time: time
-      }))
+      })),
+      emergency_count: Object.values(this.cars).flat().filter(car => car.type !== 'normal').length
     };
   }
 }
@@ -232,10 +308,7 @@ export function useTrafficData(pollInterval = 1000) {
         }
       };
 
-      // Initial fetch
       fetchData();
-
-      // Set up polling interval
       intervalRef.current = setInterval(fetchData, pollInterval);
 
       return () => {
@@ -265,6 +338,11 @@ export function useTrafficData(pollInterval = 1000) {
       mockSimulator.cars = { N: [], S: [], E: [], W: [] };
       mockSimulator.carIdCounter = 0;
       mockSimulator.totalCarsPassed = 0;
+      mockSimulator.emergencyActive = false;
+      mockSimulator.emergencyDirection = null;
+      mockSimulator.currentSignal = 'N';
+      mockSimulator.currentSignalIndex = 0;
+      mockSimulator.signalTimer = 0;
       mockSimulator.metrics = {
         waitTimes: [],
         throughputHistory: [],
